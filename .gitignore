@@ -1,2 +1,8 @@
 *.geo
 *.msh
+*.mod
+*.dbg
+*.out
+*.gnu
+*.nml
+naca456/naca456

@@ -2,11 +2,38 @@
 import pandas as pd
 from matplotlib import pyplot as plt
 import numpy as np
+import os
 
 
-def naca_profile(x,t):
+def naca_profile_4_digits(x,t):
     # for now only for sharp TE, change when need a blunt TE
     y = 5*t*(0.2969*np.sqrt(x) - 0.1260*x - 0.3516*x**2 +0.2843*x**3 -0.1036*x**4)
+    # y = 5*t*(0.2969*np.sqrt(x) - 0.1260*x - 0.3516*x**2 +0.2843*x**3 -0.1015*x**4)
+    return y
+
+def read_naca456():
+    df_temp = pd.read_csv('naca.out', skiprows=7, sep='\s+', skipfooter=1)
+    return np.array(df_temp['y'])
+
+def create_naca456_input_file(x,t):
+    with open('naca456/myNaca63016.nml',"w") as file:
+        file.write("&NACA\n")
+        file.write("  name    = 'NACA 63-018',\n")
+        file.write("  profile = '63',\n")
+        file.write(f"  toc     = {t},  \n")
+        file.write("  camber  = '0'\n")
+        if len(x)<90:
+            file.write("  denCode = 3/\n")
+        else:
+            file.write("  denCode = 0\n")
+            xx = list(map(str,x))
+            file.write(f"  xTable  = {','.join(xx)}/\n")
+
+def naca_profile_6_digits(x,t):
+    create_naca456_input_file(x,t)
+    os.system('naca456/naca456 > /dev/null')
+    y = read_naca456()
+    os.system('rm ./naca.gnu ./naca.dbg ./naca.out')
     return y
 
 def rescale_by_chord(x,xb,y_top,y_bot,chord):
@@ -16,23 +43,37 @@ def rescale_by_chord(x,xb,y_top,y_bot,chord):
     y_bot = y_bot * chord
     return x,xb,y_top,y_bot
 
+def naca_profile(x,t,type):
+    if type == 4:
+        y = naca_profile_4_digits(x,t)
+    elif type == 6:
+        y = naca_profile_6_digits(x,t)
+    else:
+        print("using 4 digit naca es default")
+        y = naca_profile_4_digits(x,t)
+
+    return y
+
 chord = 1.0
 # chord = 0.2
-# N = 100
-N = 500
+# N = 10
+N = 100
+# N = 500
 point_type = 3
-# split_lines = False
-split_lines = True
+split_lines = False
+# split_lines = True
 ref = 12
-create_mesh = True
+create_mesh = False
+# create_mesh = True
 file_name = "naca2.geo"
+type = 6
 
 if point_type == 1:
     #equally space
     t = np.linspace(0,1.0,N)
     x = t
     xb = x
-    y_top = naca_profile(t,ref/100.0)
+    y_top = naca_profile(t,ref/100.0,type)
     y_bot = -1.0 * y_top
     x,xb,y_top,y_bot = rescale_by_chord(x,xb,y_top,y_bot,chord)
 
@@ -41,15 +82,15 @@ elif point_type ==2:
     t = np.linspace(0,1.0,N)
     x = ((1 - t) ** 2)
     xb = t ** 2
-    y_top = naca_profile((1-t)**2,ref/100.0)
-    y_bot = -1.0 * naca_profile(t**2,ref/100.0)
+    y_top = naca_profile((1-t)**2,ref/100.0,type)
+    y_bot = -1.0 * naca_profile(t**2,ref/100.0,type)
     x,xb,y_top,y_bot = rescale_by_chord(x,xb,y_top,y_bot,chord)
 
 else:
     # refine in each edge
     t = np.linspace(0,np.pi,N)
     x = 0.5 * (1 - np.cos(t))
-    y_gen = naca_profile(x,ref/100.0)
+    y_gen = naca_profile(x,ref/100.0,type)
     xb = x
     y_ini = np.zeros_like(y_gen)
     y_top = y_ini + y_gen
@@ -263,5 +304,5 @@ def plot_airfoil(x,xb,y_top,y_bot,chord):
     plt.show()
 
 if __name__ == "__main__":
-    export_geo(x,xb,y_top,y_bot)
-    # plot_airfoil(x,xb,y_top,y_bot,chord)
+    # export_geo(x,xb,y_top,y_bot)
+    plot_airfoil(x,xb,y_top,y_bot,chord)
