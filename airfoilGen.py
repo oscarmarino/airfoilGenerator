@@ -4,6 +4,22 @@ from matplotlib import pyplot as plt
 import numpy as np
 import os
 
+chord = 1.0
+# chord = 0.2
+# N = 10
+# N = 100
+N = 500
+point_type = 3
+# split_lines = False
+split_lines = True
+# ref = 12
+ref = 18
+# create_mesh = False
+create_mesh = True
+create_zones = True
+file_name = "naca63.geo"
+# type = 4
+type = 6
 
 def naca_profile_4_digits(x,t):
     # for now only for sharp TE, change when need a blunt TE
@@ -54,19 +70,6 @@ def naca_profile(x,t,type):
 
     return y
 
-chord = 1.0
-# chord = 0.2
-# N = 10
-N = 100
-# N = 500
-point_type = 3
-split_lines = False
-# split_lines = True
-ref = 12
-create_mesh = False
-# create_mesh = True
-file_name = "naca2.geo"
-type = 6
 
 if point_type == 1:
     #equally space
@@ -157,9 +160,12 @@ def export_geo(x,xb,y_top,y_bot):
             final_line = 6
 
     if create_mesh:
-        export_mesh(final_point, final_line, first_point_top, second_point_top, first_point_bot, second_point_bot)
+        if not split_lines:
+            raise Exception("Mesh can only be created with spline of airfoil in parts")
+        else:
+            export_mesh(final_point, final_line, first_point_top, second_point_top, first_point_bot, second_point_bot, create_zones)
 
-def export_mesh(last_point, last_line, ft, st, fb, sb):
+def export_mesh(last_point, last_line, ft, st, fb, sb, create_zones):
     with open(file_name,"a") as file:
         file.write("\n// points for arc of cmesh\n")
         j = last_point + 1
@@ -293,6 +299,22 @@ def export_mesh(last_point, last_line, ft, st, fb, sb):
         file.write("//+\n")
         file.write(f"Recombine Surface {{1, 2, 3, 4, 5, 6, 7, 8}};\n")
         file.write("//+\n")
+    # zones may change!!!!
+    if create_zones:
+        with open(file_name,"a") as file:
+            #extrusion
+            file.write("Extrude {0, 0, 0.1} {\n")
+            file.write("  Surface{1}; Surface{2}; Surface{3}; Surface{4}; Surface{5}; Surface{6}; Surface{7}; Surface{8}; Layers{20}; Recombine;\n")
+            file.write("}\n")
+            file.write("//+\n")
+            #surface zones
+            file.write('Physical Surface("airfoil") = {140, 155, 181, 88, 62, 47};\n')
+            file.write('Physical Surface("outflow") = {39, 74, 70, 96, 118, 114, 207, 211, 189, 163, 167, 132};\n')
+            file.write('Physical Surface("sidea") = {4, 3, 2, 1, 5, 6, 7, 8};\n')
+            file.write('Physical Surface("sideb") = {48, 75, 97, 119, 212, 190, 168, 141};\n')
+            file.write("//+\n")
+            #volume zone
+            file.write('Physical Volume("fluid") = {1, 4, 8, 7, 6, 5, 2, 3};\n')
 
 def plot_airfoil(x,xb,y_top,y_bot,chord):
     fig, ax = plt.subplots()
@@ -304,5 +326,5 @@ def plot_airfoil(x,xb,y_top,y_bot,chord):
     plt.show()
 
 if __name__ == "__main__":
-    # export_geo(x,xb,y_top,y_bot)
-    plot_airfoil(x,xb,y_top,y_bot,chord)
+    export_geo(x,xb,y_top,y_bot)
+    # plot_airfoil(x,xb,y_top,y_bot,chord)

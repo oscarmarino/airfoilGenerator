@@ -6,3 +6,4 @@
 *.gnu
 *.nml
 naca456/naca456
+*pycache*
