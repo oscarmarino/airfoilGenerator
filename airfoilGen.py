@@ -4,32 +4,13 @@ from matplotlib import pyplot as plt
 import numpy as np
 import os
 
-chord = 1.0
-# chord = 0.2
-# N = 10
-N = 100
-# N = 500
-point_type = 3
-# split_lines = False
-split_lines = True
-ref = 12
-# ref = 18
-# create_mesh = False
-create_mesh = True
-# create_zones = False
-create_zones = True
-file_name = "naca2.geo"
-# file_name = "naca63.geo"
-type = 4
-# type = 6
-blunt = True
-# blunt = False
 
 def naca_profile_4_digits(x,t,blunt):
     if blunt:
-        y = 5*t*(0.2969*np.sqrt(x) - 0.1260*x - 0.3516*x**2 +0.2843*x**3 -0.1015*x**4)
+        a4 = -0.1015
     else:
-        y = 5*t*(0.2969*np.sqrt(x) - 0.1260*x - 0.3516*x**2 +0.2843*x**3 -0.1036*x**4)
+        a4 = -0.1036
+    y = 5*t*(0.2969*np.sqrt(x) - 0.1260*x - 0.3516*x**2 +0.2843*x**3 + a4*x**4)
     return y
 
 def read_naca456():
@@ -51,13 +32,13 @@ def create_naca456_input_file(x,t):
             file.write(f"  xTable  = {','.join(xx)}/\n")
 
 def naca_profile_6_digits(x,t,blunt):
+    if blunt:
+        # not changes needed here, it'll be cut and rescaled later
+        pass
     create_naca456_input_file(x,t)
     os.system('naca456/naca456 > /dev/null')
     y = read_naca456()
     os.system('rm ./naca.gnu ./naca.dbg ./naca.out')
-    if blunt:
-        #change somehow
-        pass
     return y
 
 def rescale_by_chord(x,xb,y_top,y_bot,chord):
@@ -78,37 +59,98 @@ def naca_profile(x,t,type,blunt):
 
     return y
 
+def get_straight_te(x,xb,y_top,y_bot,te_w,chord):
+    N = len(x)
+    star_index = int(N/2)
+    for i,(yt,yb) in enumerate(zip(y_top[star_index:],y_bot[star_index:])):
+        width = np.abs(yt - yb)
+        if width <= te_w:
+            break
+    i = i + star_index
+    print(f"The geometry was cut and rescaled to have a straight TE, it has now {i} points")
 
-if point_type == 1:
-    #equally space
-    t = np.linspace(0,1.0,N)
-    x = t
-    xb = x
-    y_top = naca_profile(t,ref/100.0,type,blunt)
-    y_bot = -1.0 * y_top
-    x,xb,y_top,y_bot = rescale_by_chord(x,xb,y_top,y_bot,chord)
+    symmetric = y_top[i] == -y_bot[i]
+    if not symmetric:
+        raise Exception("Straight TE rescale only implemented for simmetric airfoils")
 
-elif point_type ==2:
-    #refined le
-    t = np.linspace(0,1.0,N)
-    x = ((1 - t) ** 2)
-    xb = t ** 2
-    y_top = naca_profile((1-t)**2,ref/100.0,type,blunt)
-    y_bot = -1.0 * naca_profile(t**2,ref/100.0,type,blunt)
-    x,xb,y_top,y_bot = rescale_by_chord(x,xb,y_top,y_bot,chord)
+    x_new = x[:i]
+    xb_new = xb[:i]
+    yt_new = y_top[:i]
+    yb_new = y_bot[:i]
+    yt_new[-1] = te_w / 2.0
+    yb_new[-1] = -te_w / 2.0
 
-else:
-    # refine in each edge
-    t = np.linspace(0,np.pi,N)
-    x = 0.5 * (1 - np.cos(t))
-    y_gen = naca_profile(x,ref/100.0,type,blunt)
-    xb = x
-    y_ini = np.zeros_like(y_gen)
-    y_top = y_ini + y_gen
-    y_bot = y_ini - y_gen
-    x,xb,y_top,y_bot = rescale_by_chord(x,xb,y_top,y_bot,chord)
+    def x_linear_inter(xv,yv,y):
+        xx = (y - yv[0]) * (xv[1]-xv[0]) / (yv[1]-yv[0]) + xv[0]
+        return xx
 
-def export_geo(x,xb,y_top,y_bot,blunt):
+    if width == te_w:
+        final_length = x[i-1]
+    else:
+        final_length = x_linear_inter(x[i:i+2],y_top[i:i+2],yt_new[-1])
+
+    x_new[-1] = final_length
+    xb_new[-1] = final_length
+
+    partial_chord = chord / final_length
+    x,xb,y_top,y_bot = rescale_by_chord(x_new,xb_new,yt_new,yb_new,partial_chord)
+
+    return x, xb, y_top, y_bot
+
+def get_airfoil_points(**kwargs):
+
+    # get naca 0012 y default with 100 points ref at le and te
+    point_type = kwargs.get('point_type',3)
+    N = kwargs.get('N',100)
+    ref = kwargs.get('ref',12)
+    type = kwargs.get('type',4)
+    blunt = kwargs.get('blunt',False)
+    te_w = kwargs.get('te_w',None)
+    chord = kwargs.get('chord',1.0)
+
+    if point_type == 1:
+        #equally space
+        t = np.linspace(0,1.0,N)
+        x = t
+        xb = x
+        y_top = naca_profile(t,ref/100.0,type,blunt)
+        y_bot = -1.0 * y_top
+        x,xb,y_top,y_bot = rescale_by_chord(x,xb,y_top,y_bot,chord)
+
+    elif point_type ==2:
+        #refined le
+        t = np.linspace(0,1.0,N)
+        x = ((1 - t) ** 2)
+        xb = t ** 2
+        y_top = naca_profile((1-t)**2,ref/100.0,type,blunt)
+        y_bot = -1.0 * naca_profile(t**2,ref/100.0,type,blunt)
+        index_sort = x.argsort()
+        x = x[index_sort]
+        y_top = y_top[index_sort]
+        x,xb,y_top,y_bot = rescale_by_chord(x,xb,y_top,y_bot,chord)
+
+    else:
+        # refine in each edge
+        t = np.linspace(0,np.pi,N)
+        x = 0.5 * (1 - np.cos(t))
+        y_gen = naca_profile(x,ref/100.0,type,blunt)
+        xb = x
+        y_ini = np.zeros_like(y_gen)
+        y_top = y_ini + y_gen
+        y_bot = y_ini - y_gen
+        x,xb,y_top,y_bot = rescale_by_chord(x,xb,y_top,y_bot,chord)
+
+    if te_w is not None:
+        x,xb,y_top,y_bot = get_straight_te(x,xb,y_top,y_bot,te_w,chord)
+
+    return x, xb, y_top, y_bot
+
+def export_geo(x,xb,y_top,y_bot,file_name,**kwargs):
+    blunt = kwargs.get('blunt',False)
+    create_mesh = kwargs.get('create_mesh',False)
+    split_lines = kwargs.get('split_lines',False)
+    create_zones = kwargs.get('create_zones',False)
+    N = len(x)
     with open(file_name,"w") as file:
         file.write("c1 = 1.0;\n")
         file.write("c2 = 10.0;\n")
@@ -184,9 +226,9 @@ def export_geo(x,xb,y_top,y_bot,blunt):
             raise Exception("Mesh can only be created with spline of airfoil in parts")
         else:
             y_position_last_point = y_top[-1]
-            export_mesh(final_point, final_line, first_point_top, second_point_top, first_point_bot, second_point_bot, create_zones, y_position_last_point, blunt)
+            export_mesh(N, final_point, final_line, first_point_top, second_point_top, first_point_bot, second_point_bot, create_zones, y_position_last_point, blunt)
 
-def export_mesh(last_point, last_line, ft, st, fb, sb, create_zones, yl, blunt):
+def export_mesh(N, last_point, last_line, ft, st, fb, sb, create_zones, yl, blunt):
     with open(file_name,"a") as file:
         file.write("\n// points for arc of cmesh\n")
         j = last_point + 1
@@ -383,15 +425,39 @@ def export_mesh(last_point, last_line, ft, st, fb, sb, create_zones, yl, blunt):
                 #volume zone
                 file.write('Physical Volume("fluid") = {1, 2, 3, 4, 5, 6, 7, 8};\n')
 
-def plot_airfoil(x,xb,y_top,y_bot,chord):
+def plot_airfoil(x,xb,y_top,y_bot,**kwargs):
+    chord = kwargs.get('chord',1.0)
+    prop = kwargs.get('prop','kd')
     fig, ax = plt.subplots()
-    plt.plot(x,y_top,'kd')
-    plt.plot(xb,y_bot,'kd')
+    plt.plot(x,y_top,prop)
+    plt.plot(xb,y_bot,prop)
     lim = 0.2*chord
     ax.set_ylim([-lim,lim])
     plt.grid()
-    plt.show()
 
 if __name__ == "__main__":
-    export_geo(x,xb,y_top,y_bot,blunt)
-    # plot_airfoil(x,xb,y_top,y_bot,chord)
+    # chord = 0.2
+    # N = 100
+    N = 500
+    ref = 18
+    file_name = "naca2.geo"
+    type = 6
+    blunt = True
+    trailing_edge_width = 0.001 / 0.2 # 1 mm scaled by chord
+    # x, xb, y_top, y_bot = get_airfoil_points(N=N)
+    x, xb, y_top, y_bot = get_airfoil_points(N=N,blunt=True, te_w=trailing_edge_width)
+    plot_airfoil(x,xb,y_top,y_bot,prop='k-')
+    export_geo(x,xb,y_top,y_bot,file_name,blunt=blunt,create_mesh=True,split_lines=True,create_zones=True)
+
+    trailing_edge_width = 0.31 / 1000 / 0.2 # 0.31 mm scaled by chord
+    file_name = "naca63.geo"
+    x, xb, y_top, y_bot = get_airfoil_points(N=N, ref=ref, type=type, blunt=blunt,te_w=trailing_edge_width)
+
+    plot_airfoil(x,xb,y_top,y_bot,prop='k-')
+    # plot_airfoil(x,xb,y_top,y_bot)
+    # export_geo(x,xb,y_top,y_bot,file_name)
+    # export_geo(x,xb,y_top,y_bot,file_name,blunt=blunt)
+    # export_geo(x,xb,y_top,y_bot,file_name,create_mesh=True,split_lines=True,create_zones=True)
+    export_geo(x,xb,y_top,y_bot,file_name,blunt=blunt,create_mesh=True,split_lines=True,create_zones=True)
+
+    plt.show()
