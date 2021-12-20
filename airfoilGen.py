@@ -41,11 +41,15 @@ def naca_profile_6_digits(x,t,blunt):
     os.system('rm ./naca.gnu ./naca.dbg ./naca.out')
     return y
 
-def rescale_by_chord(x,xb,y_top,y_bot,chord):
+def rescale_by_chord(x,xb,y_top,y_bot,chord,resc_y=True):
     x = x * chord
     xb = xb * chord
-    y_top = y_top * chord
-    y_bot = y_bot * chord
+    if resc_y:
+        chord_y = chord
+    else:
+        chord_y = 1
+    y_top = y_top * chord_y
+    y_bot = y_bot * chord_y
     return x,xb,y_top,y_bot
 
 def naca_profile(x,t,type,blunt):
@@ -93,7 +97,7 @@ def get_straight_te(x,xb,y_top,y_bot,te_w,chord):
     xb_new[-1] = final_length
 
     partial_chord = chord / final_length
-    x,xb,y_top,y_bot = rescale_by_chord(x_new,xb_new,yt_new,yb_new,partial_chord)
+    x,xb,y_top,y_bot = rescale_by_chord(x_new,xb_new,yt_new,yb_new,partial_chord,resc_y=False)
 
     return x, xb, y_top, y_bot
 
@@ -425,6 +429,17 @@ def export_mesh(N, last_point, last_line, ft, st, fb, sb, create_zones, yl, blun
                 #volume zone
                 file.write('Physical Volume("fluid") = {1, 2, 3, 4, 5, 6, 7, 8};\n')
 
+def export_txt(x,xb,y_top,y_bot,file_name,le_start=True):
+    if le_start:
+        k = 0
+    with open(file_name,"w") as file:
+        file.write(f"x          y\n")
+        for a,b in zip(x,y_top):
+            file.write(f"{a:6.4e} {b:6.4e}\n")
+        for a,b in zip(xb,y_bot):
+            file.write(f"{a:6.4e} {b:2.6e}\n")
+
+
 def plot_airfoil(x,xb,y_top,y_bot,**kwargs):
     chord = kwargs.get('chord',1.0)
     prop = kwargs.get('prop','kd')
@@ -445,9 +460,14 @@ if __name__ == "__main__":
     blunt = True
     trailing_edge_width = 0.001 / 0.2 # 1 mm scaled by chord
     # x, xb, y_top, y_bot = get_airfoil_points(N=N)
+    # x, xb, y_top, y_bot = get_airfoil_points(N=N,blunt=blunt)
+    # x, xb, y_top, y_bot = get_airfoil_points(N=N,te_w=trailing_edge_width)
     x, xb, y_top, y_bot = get_airfoil_points(N=N,blunt=True, te_w=trailing_edge_width)
     plot_airfoil(x,xb,y_top,y_bot,prop='k-')
     export_geo(x,xb,y_top,y_bot,file_name,blunt=blunt,create_mesh=True,split_lines=True,create_zones=True)
+    # fn = "naca5str.txt"
+    # # fn = "naca2b.txt"
+    # export_txt(x,xb,y_top,y_bot,fn)
 
     trailing_edge_width = 0.31 / 1000 / 0.2 # 0.31 mm scaled by chord
     file_name = "naca63.geo"
