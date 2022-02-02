@@ -230,9 +230,9 @@ def export_geo(x,xb,y_top,y_bot,file_name,**kwargs):
             raise Exception("Mesh can only be created with spline of airfoil in parts")
         else:
             y_position_last_point = y_top[-1]
-            export_mesh(N, final_point, final_line, first_point_top, second_point_top, first_point_bot, second_point_bot, create_zones, y_position_last_point, blunt)
+            export_mesh(file_name, N, final_point, final_line, first_point_top, second_point_top, first_point_bot, second_point_bot, create_zones, y_position_last_point, blunt)
 
-def export_mesh(N, last_point, last_line, ft, st, fb, sb, create_zones, yl, blunt):
+def export_mesh(file_name, N, last_point, last_line, ft, st, fb, sb, create_zones, yl, blunt):
     with open(file_name,"a") as file:
         file.write("\n// points for arc of cmesh\n")
         j = last_point + 1
@@ -454,10 +454,8 @@ def default_examples():
     # chord = 0.2
     # N = 100
     N = 500
-    ref = 18
-    file_name = "naca12str.geo"
-    type = 6
     blunt = True
+    file_name = "naca12str.geo"
     trailing_edge_width = 0.001 / 0.2 # 1 mm scaled by chord
     # x, xb, y_top, y_bot = get_airfoil_points(N=N)
     # x, xb, y_top, y_bot = get_airfoil_points(N=N,blunt=blunt)
@@ -470,7 +468,9 @@ def default_examples():
     # export_txt(x,xb,y_top,y_bot,fn)
 
     trailing_edge_width = 0.31 / 1000 / 0.2 # 0.31 mm scaled by chord
+    ref = 18
     file_name = "naca63.geo"
+    type = 6
     x, xb, y_top, y_bot = get_airfoil_points(N=N, ref=ref, type=type, blunt=blunt,te_w=trailing_edge_width)
 
     plot_airfoil(x,xb,y_top,y_bot,prop='k-')
