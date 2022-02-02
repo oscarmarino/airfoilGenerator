@@ -450,12 +450,12 @@ def plot_airfoil(x,xb,y_top,y_bot,**kwargs):
     ax.set_ylim([-lim,lim])
     plt.grid()
 
-if __name__ == "__main__":
+def default_examples():
     # chord = 0.2
     # N = 100
     N = 500
     ref = 18
-    file_name = "naca2.geo"
+    file_name = "naca12str.geo"
     type = 6
     blunt = True
     trailing_edge_width = 0.001 / 0.2 # 1 mm scaled by chord
@@ -465,7 +465,7 @@ if __name__ == "__main__":
     x, xb, y_top, y_bot = get_airfoil_points(N=N,blunt=True, te_w=trailing_edge_width)
     plot_airfoil(x,xb,y_top,y_bot,prop='k-')
     export_geo(x,xb,y_top,y_bot,file_name,blunt=blunt,create_mesh=True,split_lines=True,create_zones=True)
-    # fn = "naca5str.txt"
+    # fn = "naca12str.txt"
     # # fn = "naca2b.txt"
     # export_txt(x,xb,y_top,y_bot,fn)
 
@@ -480,4 +480,6 @@ if __name__ == "__main__":
     # export_geo(x,xb,y_top,y_bot,file_name,create_mesh=True,split_lines=True,create_zones=True)
     export_geo(x,xb,y_top,y_bot,file_name,blunt=blunt,create_mesh=True,split_lines=True,create_zones=True)
 
+if __name__ == "__main__":
+    default_examples()
     plt.show()
