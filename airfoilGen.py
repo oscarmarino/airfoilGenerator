@@ -11,6 +11,8 @@ def naca_profile_4_digits(x,t,blunt):
     else:
         a4 = -0.1036
     y = 5*t*(0.2969*np.sqrt(x) - 0.1260*x - 0.3516*x**2 +0.2843*x**3 + a4*x**4)
+    if not blunt and abs(y[-1]) < 1.0e-10:
+        y[-1] = 0.0
     return y
 
 def read_naca456():
@@ -154,11 +156,22 @@ def export_geo(x,xb,y_top,y_bot,file_name,**kwargs):
     create_mesh = kwargs.get('create_mesh',False)
     split_lines = kwargs.get('split_lines',False)
     create_zones = kwargs.get('create_zones',False)
+    R = kwargs.get('mesh_r',10.0)
+    W = kwargs.get('mesh_w',12.0)
     N = len(x)
+    c4 = 0.15*R + 1.0
+    c5 = 0.0353*R + 0.644
+    c7 = 1.2714*R + 87.257
+    xc7 = R*np.cos(np.pi*c7/180)
+    c6 = (c5-xc7)*0.48 + xc7
     with open(file_name,"w") as file:
         file.write("c1 = 1.0;\n")
-        file.write("c2 = 10.0;\n")
-        file.write("c3 = 12.0;\n")
+        file.write(f"c2 = {R};\n")
+        file.write(f"c3 = {W};\n")
+        file.write(f"c4 = {c4};\n")
+        file.write(f"c5 = {c5};\n")
+        file.write(f"c6 = {c6};\n")
+        file.write(f"c7 = {c7};\n")
         i = 0
         # write points
         file.write("\n// airfoil top\n")
@@ -236,24 +249,21 @@ def export_mesh(file_name, N, last_point, last_line, ft, st, fb, sb, create_zone
     with open(file_name,"a") as file:
         file.write("\n// points for arc of cmesh\n")
         j = last_point + 1
-        file.write(f"Point({j}) = {{c2*Cos(Pi*100/180), c2*Sin(Pi*100/180), 0.0, c1 }};\n")
+        file.write(f"Point({j}) = {{c2*Cos(Pi*c7/180), c2*Sin(Pi*c7/180), 0.0, c1 }};\n")
         j += 1
-        file.write(f"Point({j}) = {{c2*Cos(Pi*100/180), -c2*Sin(Pi*100/180), 0.0, c1 }};\n")
+        file.write(f"Point({j}) = {{c2*Cos(Pi*c7/180), -c2*Sin(Pi*c7/180), 0.0, c1 }};\n")
         j += 1
         file.write(f"Point({j}) = {{-c2, 0.0, 0.0, c1 }};\n")
         j += 1
 
         file.write("// points for rest of cmesh\n")
-        distance_a = 2.5
-        distance_b = 1.0
-        distance_c = 0.4
         factor_a = 1.015
         factor_b = 1.01
-        file.write(f"Point({j}) = {{{distance_a}, c2, 0.0, c1 }};\n")
+        file.write(f"Point({j}) = {{c4, c2, 0.0, c1 }};\n")
         j += 1
         file.write(f"Point({j}) = {{c3, c2, 0.0, c1 }};\n")
         j += 1
-        file.write(f"Point({j}) = {{{distance_a}, -c2, 0.0, c1 }};\n")
+        file.write(f"Point({j}) = {{c4, -c2, 0.0, c1 }};\n")
         j += 1
         file.write(f"Point({j}) = {{c3, -c2, 0.0, c1 }};\n")
         j += 1
@@ -261,15 +271,15 @@ def export_mesh(file_name, N, last_point, last_line, ft, st, fb, sb, create_zone
         j += 1
         file.write(f"Point({j}) = {{-c2*Cos(Pi/4), c2*Sin(Pi/4), 0.0, c1 }};\n")
         j += 1
-        file.write(f"Point({j}) = {{{distance_b}, c2*{factor_a}, 0.0, c1 }};\n")
+        file.write(f"Point({j}) = {{c5, c2*{factor_a}, 0.0, c1 }};\n")
         j += 1
-        file.write(f"Point({j}) = {{-{distance_c}, c2*{factor_b}, 0.0, c1 }};\n")
+        file.write(f"Point({j}) = {{c6, c2*{factor_b}, 0.0, c1 }};\n")
         j += 1
         file.write(f"Point({j}) = {{-c2*Cos(Pi/4), -c2*Sin(Pi/4), 0.0, c1 }};\n")
         j += 1
-        file.write(f"Point({j}) = {{{distance_b}, -c2*{factor_a}, 0.0, c1 }};\n")
+        file.write(f"Point({j}) = {{c5, -c2*{factor_a}, 0.0, c1 }};\n")
         j += 1
-        file.write(f"Point({j}) = {{-{distance_c}, -c2*{factor_b}, 0.0, c1 }};\n")
+        file.write(f"Point({j}) = {{c6, -c2*{factor_b}, 0.0, c1 }};\n")
         j += 1
         file.write("//+\n")
         if blunt:
@@ -379,16 +389,18 @@ def export_mesh(file_name, N, last_point, last_line, ft, st, fb, sb, create_zone
         file.write("\n// Curves divisions, change to custom\n")
         file.write(f"Transfinite Curve {{{last_line+13}, -{last_line+11}, {last_line+7}, {last_line+14}, {last_line+10}, {last_line+15}, {last_line+16}, {last_line+18}, {last_line+19}}} = 50 Using Progression 0.865;\n")
         file.write("//+\n")
-        file.write(f"Transfinite Curve {{1, 2, {last_line+3}, {last_line+4}}} = 11 Using Progression 1;\n")
-        file.write(f"Transfinite Curve {{{last_line+1},{last_line+2}}} = 95 Using Progression 1;\n")
-        file.write(f"Transfinite Curve {{{last_line+17}, {last_line+20}}} = 46 Using Progression 1;\n")
-        file.write(f"Transfinite Curve {{-3,-4}} = 140 Using Progression 0.998;\n")
-        file.write(f"Transfinite Curve {{{last_line+8}, {last_line+5}, 5, 6}} = 90 Using Progression 1;\n")
+        file.write(f"Transfinite Curve {{-1, -2}} = 12 Using Progression 0.975;\n")
+        file.write(f"Transfinite Curve {{{last_line+3}, {last_line+4}}} = 12 Using Progression 0.75;\n")
+        file.write(f"Transfinite Curve {{{last_line+1},{last_line+2}}} = 95 Using Progression 0.9955;\n")
+        file.write(f"Transfinite Curve {{-{last_line+17}, -{last_line+20}}} = 46 Using Progression 0.995;\n")
+        file.write(f"Transfinite Curve {{-3,-4}} = 140 Using Progression 0.995;\n")
+        file.write(f"Transfinite Curve {{5, 6}} = 80 Using Progression 0.989;\n")
+        file.write(f"Transfinite Curve {{{last_line+8}, {last_line+5}}} = 80 Using Progression 0.9582;\n")
         if blunt:
-            file.write(f"Transfinite Curve {{-{last_line+12}, -{last_line+6}, -{last_line+9}, -{last_line+22}}} = 60 Using Progression 0.91;\n")
+            file.write(f"Transfinite Curve {{-{last_line+12}, -{last_line+6}, -{last_line+9}, -{last_line+22}}} = 70 Using Progression 0.9174;\n")
             file.write(f"Transfinite Curve {{{last_line}, {last_line+21}}} = 5 Using Progression 1;\n")
         else:
-            file.write(f"Transfinite Curve {{-{last_line+12}, -{last_line+6}, -{last_line+9}}} = 60 Using Progression 0.91;\n")
+            file.write(f"Transfinite Curve {{-{last_line+12}, -{last_line+6}, -{last_line+9}}} = 70 Using Progression 0.9174;\n")
 
         file.write("//+\n")
         if blunt:
@@ -402,7 +414,7 @@ def export_mesh(file_name, N, last_point, last_line, ft, st, fb, sb, create_zone
             if blunt:
                 #extrusion
                 file.write("Extrude {0, 0, 0.1} {\n")
-                file.write("  Surface{1}; Surface{2}; Surface{3}; Surface{4}; Surface{5}; Surface{6}; Surface{7}; Surface{8}; Surface{9}; Layers{20}; Recombine;\n")
+                file.write("  Surface{1, 2, 3, 4, 5, 6, 7, 8, 9}; Layers{20}; Recombine;\n")
                 file.write("}\n")
                 file.write("//+\n")
                 #surface zones
@@ -417,7 +429,7 @@ def export_mesh(file_name, N, last_point, last_line, ft, st, fb, sb, create_zone
             else:
                 #extrusion
                 file.write("Extrude {0, 0, 0.1} {\n")
-                file.write("  Surface{1}; Surface{2}; Surface{3}; Surface{4}; Surface{5}; Surface{6}; Surface{7}; Surface{8}; Layers{20}; Recombine;\n")
+                file.write("  Surface{1, 2, 3, 4, 5, 6, 7, 8}; Layers{34}; Recombine;\n")
                 file.write("}\n")
                 file.write("//+\n")
                 #surface zones
@@ -454,31 +466,38 @@ def default_examples():
     # chord = 0.2
     # N = 100
     N = 500
+
+    # Create a sharp TE NACA0012 mesh with a domain of R=4 and W=4 (inflow and outflow BC in distance in chord length); manual adjustments on the progression of the mesh is needed
+    blunt = False
+    file_name = "naca12sharp4.geo"
+    x, xb, y_top, y_bot = get_airfoil_points(N=N,blunt=blunt)
+    export_geo(x,xb,y_top,y_bot,file_name,blunt=blunt,create_mesh=True,split_lines=True,create_zones=True, mesh_r=4.0, mesh_w=4.0)
+    plot_airfoil(x,xb,y_top,y_bot,prop='k-')
+
+    # Create a blunt straight TE NACA0012 mesh with a default domain of R=10 and W=12 (inflow and outflow BC in distance in chord length) and export points as txt
     blunt = True
     file_name = "naca12str.geo"
     trailing_edge_width = 0.001 / 0.2 # 1 mm scaled by chord
-    # x, xb, y_top, y_bot = get_airfoil_points(N=N)
-    # x, xb, y_top, y_bot = get_airfoil_points(N=N,blunt=blunt)
-    # x, xb, y_top, y_bot = get_airfoil_points(N=N,te_w=trailing_edge_width)
-    x, xb, y_top, y_bot = get_airfoil_points(N=N,blunt=True, te_w=trailing_edge_width)
+    x, xb, y_top, y_bot = get_airfoil_points(N=N,blunt=blunt, te_w=trailing_edge_width)
     plot_airfoil(x,xb,y_top,y_bot,prop='k-')
     export_geo(x,xb,y_top,y_bot,file_name,blunt=blunt,create_mesh=True,split_lines=True,create_zones=True)
-    # fn = "naca12str.txt"
-    # # fn = "naca2b.txt"
-    # export_txt(x,xb,y_top,y_bot,fn)
+    fn = "naca12str.txt"
+    export_txt(x,xb,y_top,y_bot,fn)
 
+    # Create a blunt straight TE NACA63018 mesh with a default domain of R=10 and W=12 (inflow and outflow BC in distance in chord length)
     trailing_edge_width = 0.31 / 1000 / 0.2 # 0.31 mm scaled by chord
     ref = 18
     file_name = "naca63.geo"
     type = 6
     x, xb, y_top, y_bot = get_airfoil_points(N=N, ref=ref, type=type, blunt=blunt,te_w=trailing_edge_width)
-
     plot_airfoil(x,xb,y_top,y_bot,prop='k-')
+    export_geo(x,xb,y_top,y_bot,file_name,blunt=blunt,create_mesh=True,split_lines=True,create_zones=True)
+
+    # other options
     # plot_airfoil(x,xb,y_top,y_bot)
     # export_geo(x,xb,y_top,y_bot,file_name)
     # export_geo(x,xb,y_top,y_bot,file_name,blunt=blunt)
     # export_geo(x,xb,y_top,y_bot,file_name,create_mesh=True,split_lines=True,create_zones=True)
-    export_geo(x,xb,y_top,y_bot,file_name,blunt=blunt,create_mesh=True,split_lines=True,create_zones=True)
 
 if __name__ == "__main__":
     default_examples()
